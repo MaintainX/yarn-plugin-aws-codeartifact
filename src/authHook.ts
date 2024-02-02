@@ -14,7 +14,7 @@ import {
   getPluginRegistryConfig,
   getScopePluginRegistryConfig
 } from './utils'
-import { Codeartifact } from '@aws-sdk/client-codeartifact'
+import { Codeartifact, CodeartifactClientConfig } from '@aws-sdk/client-codeartifact'
 import { decorateDefaultCredentialProvider } from '@aws-sdk/client-sts'
 import { defaultProvider } from '@aws-sdk/credential-provider-node'
 import { fromEnv } from '@aws-sdk/credential-provider-env'
@@ -193,7 +193,7 @@ const getAuthorizationToken = memoizePromise(
         // https://docs.aws.amazon.com/codeartifact/latest/APIReference/API_GetAuthorizationToken.html#API_GetAuthorizationToken_RequestSyntax
         durationSeconds: 900 // 15 minutes
       }
-      authorizationToken = (await client.getAuthorizationToken(params)).authorizationToken
+      authorizationToken = await tryLogin(async () => (await client.getAuthorizationToken(params)).authorizationToken)
     }
 
     if (!authorizationToken) {
@@ -213,6 +213,26 @@ const getAuthorizationToken = memoizePromise(
   },
   (authorizationTokenParams, pluginRegistryConfig) => JSON.stringify({ authorizationTokenParams, pluginRegistryConfig })
 )
+
+/**
+ * Try to login to AWS SSO if an error occurs
+ *
+ * @param {Function} fn - Function to execute
+ */
+async function tryLogin<T>(fn: () => Promise<T>) {
+  let error
+  try {
+    return await fn()
+  } catch (err) {
+    error = err
+  }
+  // Try to login again
+  const exitCode = await execute('aws sso login')
+  if (exitCode) {
+    throw error
+  }
+  return await fn()
+}
 
 /**
  * Determine the starting directory for searching for plugin configuration files
