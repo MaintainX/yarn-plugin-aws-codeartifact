@@ -21,7 +21,7 @@ jobs:
           comment-summary-in-pr: on-failure
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: lts/*
           cache: yarn
       - run: yarn
       - run: yarn test
